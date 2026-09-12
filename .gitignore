@@ -1,0 +1,15 @@
+# MATLAB / Octave temporary files
+*.asv
+*.m~
+octave-workspace
+.octave_hist
+
+# Local editor and agent settings
+.vscode/
+.idea/
+.agents/
+.codex/
+
+# OS metadata
+.DS_Store
+Thumbs.db
