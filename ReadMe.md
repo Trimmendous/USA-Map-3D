@@ -18,48 +18,78 @@ The mapping package is only needed if you choose to load a separate shapefile.
 
 ## Usage
 
-Open the map:
-
 ```matlab
-usa
+usa                                         % bank-failure demo
+usa(data)                                   % your data
+usa(data, 'Title', 'Median income', 'Output', 'out.png')
 ```
 
-Save a still image:
+`data` can be almost anything keyed by state. Keys may be postal codes or
+names in any case (`'CA'`, `'california'`, `'New_York'`):
 
 ```matlab
-usa([], 'output/usa-bank-failures.png');
+usa(struct('CA', 39.0, 'TX', 30.5, 'NY', 19.6))          % scalar struct
+usa(containers.Map({'CA','New York'}, {3, 7}))           % Map
+usa({{'CA','NY','TX'}, [3 7 2]})                         % keys + values
+usa(myTable, 'StateColumn', 'st', 'ValueColumn', 'pop')  % table / struct array
+usa({'CA','CA','TX'})                                    % raw records: counted
+usa(values50)                                            % 50-vector, alphabetical (see usaStates)
+usa('sales.csv', 'ValueColumn', 'Revenue')               % CSV: summed per state
+usa('banklist.csv')                                      % CSV, no value column: rows counted
 ```
 
-Or from a terminal:
+Repeated keys are combined with `'Aggregate'` (`sum`, `count`, `mean`, `max`,
+`min`). Non-state keys such as `PR` or `DC` are skipped with one warning.
+`usaData` does the normalization on its own if you only want the 50x1 vector.
+
+| Option | Default | |
+|---|---|---|
+| `Title`, `ValueLabel`, `Footer` | | Text |
+| `Output` | `''` | Write a PNG (figure closes unless returned) |
+| `Colors` | `'value'` | `'value'` ramp, `'states'` distinct palette, N x 3 colormap, or colormap name |
+| `Height` | `0.35` | Tallest prism as a fraction of map width |
+| `Contours` | `0` | Stacked rings: N levels, or `'unit'` for one per 1.0 |
+| `View` | `[-12 55]` | Azimuth, elevation |
+| `Legend` | `true` | `false`, or N for the top N states |
+| `Format` | `'%g'` | Legend number format |
+| `Renderer` | `'auto'` | `'opengl'` rotatable, `'raster'` fixed image |
+| `Boundaries` | bundled | Alternate `.json` or shapefile |
+
+From a terminal:
 
 ```bash
-octave --no-gui --quiet --eval "usa([], 'output/usa-bank-failures.png'); close all;"
+octave --no-gui --quiet --eval "usa([], 'output/usa-bank-failures.png')"
 ```
 
-MATLAB and Octave's Qt backend provide an interactive 3D view. If Octave only
-has gnuplot available, the same geometry is drawn with a fixed orthographic
-camera using a MATLAB-language rasterizer with a depth buffer. That fallback
-does not support 3D rotation. Both paths support PNG export.
+## Performance
 
-To load a geographic shapefile with a `Name` field instead of the bundled data:
+The 2.5D look is built to be cheap:
 
-```matlab
-usa('/path/to/states.shp', 'custom-map.png');
-```
+- Polygons are triangulated once (~1.5 s), then cached in memory and in
+  `tempdir` (~0.06 s to reload). The cache is keyed on the boundary file.
+- The whole map is **one patch** (tops plus walls) and one outline line per
+  state: about 50 graphics objects instead of one per contour ring. The
+  original version created ~1,500, so rotation now stays smooth.
+- Walls get a fake directional shade computed once per edge, so no lighting
+  engine runs.
+- In Octave 11 (qt), the demo renders and saves in ~0.5 s, down from ~5.2 s.
 
-Keep its matching `.shx` and `.dbf` files alongside it. This optional path
-requires Octave's mapping package or MATLAB's Mapping Toolbox. Rings must be
-simple exterior polygons; polygon holes are not supported by this renderer.
+If only gnuplot is available, `rasterizeMap` draws the same scene with a
+depth buffer into a fixed image (~1.8 s); rotation isn't available there.
+
+To load a shapefile with a `Name` field, use `usa(data, 'Boundaries',
+'/path/to/states.shp')`. Keep the matching `.shx` and `.dbf` files alongside
+it. This needs Octave's mapping package or MATLAB's Mapping Toolbox, and
+polygon holes are not supported.
 
 ## Map and data
 
-- The original alphabetical state colors and one-contour-per-failure style are retained.
+- The demo keeps the original alphabetical state colors and one-contour-per-failure style.
 - All 50 states are included. Alaska and Hawaii are labeled, rescaled insets.
 - Heights represent counts; zero-count states remain flat and gray.
-- The bundled CSV has **563 records in the 50 states** for the January 2000–
-  December 2023 window. Its latest record is July 2023. Four Puerto Rico records
-  are excluded because this map currently covers the 50 states.
-- Two-digit CSV years use a 2000 pivot. Quoted fields containing commas are supported.
+- The bundled CSV has **563 records in the 50 states** (2000 to July 2023).
+  Four Puerto Rico records are excluded because the map covers the 50 states.
+- Quoted CSV fields containing commas are supported.
 - Coordinates use a spherical Lambert conformal conic projection with standard
   parallels 33/45 degrees and mainland origin 39/-96 degrees.
 
@@ -81,8 +111,8 @@ addpath('tests');
 test_map
 ```
 
-Checks cover state coverage, bank counts, triangulated polygon areas, and
-draw-order-independent depth buffering. MATLAB execution still needs verification;
+Checks cover state coverage, triangulated polygon areas, every data-adapter
+input form, and draw-order-independent depth buffering. MATLAB execution still needs verification;
 development checks run in GNU Octave 11.1.
 
 ## Future
